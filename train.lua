@@ -238,6 +238,7 @@ function eval_split(split_index, max_batches)
     for i = 1,n do -- iterate over batches in the split
         if i % reset_frequency == 0 then
             rnn_state = reset_state(init_state)
+        end
 
         -- fetch a batch
         local x, y = loader:next_batch(split_index)
@@ -381,5 +382,3 @@ for i = 1, iterations do
         break -- halt
     end
 end
-
-
