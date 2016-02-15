@@ -21,7 +21,7 @@ require 'lfs'
 
 require 'util.OneHot'
 require 'util.misc'
-local CharSplitLMMinibatchLoader = require 'util.CharSplitLMMinibatchLoader'
+local MinibatchLoader = require 'util.MinibatchLoader'
 local model_utils = require 'util.model_utils'
 local LSTM = require 'model.LSTM'
 local GRU = require 'model.GRU'
@@ -44,8 +44,8 @@ cmd:option('-learning_rate_decay',0.97,'learning rate decay')
 cmd:option('-learning_rate_decay_after',10,'in number of epochs, when to start decaying the learning rate')
 cmd:option('-decay_rate',0.95,'decay rate for rmsprop')
 cmd:option('-dropout',0,'dropout for regularization, used after each RNN hidden layer. 0 = no dropout')
-cmd:option('-seq_length',10,'number of timesteps to unroll for')
-cmd:option('-batch_size',25,'number of sequences to train on in parallel')
+cmd:option('-seq_length',20,'number of timesteps to unroll for')
+cmd:option('-batch_size',256,'number of sequences to train on in parallel')
 cmd:option('-max_epochs',50,'number of full passes through the training data')
 cmd:option('-grad_clip',5,'clip gradients at this value')
 cmd:option('-train_frac',0.95,'fraction of data that goes into train set')
@@ -108,7 +108,7 @@ if opt.gpuid >= 0 and opt.opencl == 1 then
 end
 
 -- create the data loader class
-local loader = CharSplitLMMinibatchLoader.create(opt.data_dir, opt.batch_size, opt.seq_length, split_sizes)
+local loader = MinibatchLoader.create(opt.data_dir, opt.batch_size, opt.seq_length, split_sizes)
 local vocab_size = loader.vocab_size  -- the number of distinct characters
 local vocab = loader.vocab_mapping
 print('vocab size: ' .. vocab_size)
@@ -322,7 +322,7 @@ for i = 1, iterations do
     end
     local time = timer:time().real
     
-    local train_loss = loss[1] -- the loss is inside a list, pop it
+    local train_loss = loss[1] -- the loss is   inside a list, pop it
     train_losses[i] = train_loss
 
     -- exponential learning rate decay

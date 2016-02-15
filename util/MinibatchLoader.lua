@@ -5,54 +5,82 @@
 local EOS_SYBOL = '|'
 local PAD_SYBOL = '~'
 
-local CharSplitLMMinibatchLoader = {}
-CharSplitLMMinibatchLoader.__index = CharSplitLMMinibatchLoader
+local LINES_BATCH_SIZE = 1000
 
-function CharSplitLMMinibatchLoader.create(data_dir, batch_size, seq_length, split_fractions)
+local MinibatchLoader = {}
+MinibatchLoader.__index = MinibatchLoader
+
+function MinibatchLoader.create(data_dir, batch_size, seq_length, split_fractions)
     -- split_fractions is e.g. {0.9, 0.05, 0.05}
 
     local self = {}
-    setmetatable(self, CharSplitLMMinibatchLoader)
+    setmetatable(self, MinibatchLoader)
 
     self.batch_size = batch_size
     self.seq_length = seq_length
 
-    local input_file = path.join(data_dir, 'input.txt')
-    local vocab_file = path.join(data_dir, 'vocab.t7')
-    local x_tensor_file = path.join(data_dir, 'x_tensor.t7')
-    local y_tensor_file = path.join(data_dir, 'y_tensor.t7')
+    local input_file_path = path.join(data_dir, 'input.txt')
+    local vocab_file_path = path.join(data_dir, 'vocab.t7')
+    local x_tensor_file_path = path.join(data_dir, 'x_tensor.t7')
+    local y_tensor_file_path = path.join(data_dir, 'y_tensor.t7')
 
-    local run_prepro = CharSplitLMMinibatchLoader.is_processing_needed(input_file, vocab_file, x_tensor_file, y_tensor_file)
+    local run_prepro = MinibatchLoader.is_processing_needed(input_file_path, vocab_file_path, x_tensor_file_path, y_tensor_file_path)
+
+    local x_tensor = torch.ByteTensor(1, seq_length):fill(1)
+    local y_tensor = torch.ByteTensor(1, seq_length):fill(1)
 
     if run_prepro then
-        local vocab_mapping = CharSplitLMMinibatchLoader.get_vocab_mapping(input_file)
-        local tokenized_lines = CharSplitLMMinibatchLoader.get_processed_lines(input_file)
-        local all_x_sequences, all_y_sequences = CharSplitLMMinibatchLoader.get_all_xy_sequences(tokenized_lines, seq_length)
+        local vocab_mapping = MinibatchLoader.get_vocab_mapping(input_file_path)
 
---        for i=1, #all_x_sequences do
---            print(all_x_sequences[i], all_y_sequences[i])
---        end
+        local file = io.open(input_file_path, 'r');
+        local all_lines = {}
+        local all_lines_num = 0
+        for line in file:lines() do
+            table.insert(all_lines, line)
+            all_lines_num = all_lines_num + 1
+        end
 
-        -- construct a tensor with all the data, and vocab file
-        print('one-time setup: preprocessing input text file ' .. input_file .. '...')
+        for i=1, #all_lines, LINES_BATCH_SIZE do
+            local lines_chunk = {}
+            print('-----------------------------------')
+            print(string.format('tensor build progress: %.2f %%', 100 * (i / all_lines_num)))
 
-        local x_tensor = CharSplitLMMinibatchLoader.sequences_to_tensor(all_x_sequences, seq_length, vocab_mapping)
-        local y_tensor = CharSplitLMMinibatchLoader.sequences_to_tensor(all_y_sequences, seq_length, vocab_mapping)
+            for j=1, LINES_BATCH_SIZE do
+                lines_chunk[j] = all_lines[i+j]
+            end
 
-        CharSplitLMMinibatchLoader.save_files(vocab_file, vocab_mapping, x_tensor_file, x_tensor, y_tensor_file, y_tensor)
+            local tokenized_lines = MinibatchLoader.get_processed_lines(lines_chunk)
+            local all_x_sequences, all_y_sequences = MinibatchLoader.get_all_xy_sequences(tokenized_lines, seq_length)
+--            for i=1, #all_x_sequences do
+--                print(all_x_sequences[i], all_y_sequences[i])
+--            end
+
+            -- construct a tensor with all the data, and vocab file
+            print('one-time setup: preprocessing input text file ' .. input_file_path .. '...')
+
+            local x_tensor_part = MinibatchLoader.sequences_to_tensor(all_x_sequences, seq_length, vocab_mapping)
+            local y_tensor_part = MinibatchLoader.sequences_to_tensor(all_y_sequences, seq_length, vocab_mapping)
+
+            x_tensor = torch.cat(x_tensor, x_tensor_part, 1)
+            y_tensor = torch.cat(y_tensor, y_tensor_part, 1)
+            print('dimensions of x-tensor:', x_tensor:size(1), x_tensor:size(2))
+            print('dimensions of y-tensor:', y_tensor:size(1), y_tensor:size(2))
+        end
+
+        MinibatchLoader.save_files(vocab_file_path, vocab_mapping, x_tensor_file_path, x_tensor, y_tensor_file_path, y_tensor)
     end
 
     print('loading data files...')
 
-    self.vocab_mapping = torch.load(vocab_file)
-    self.vocab_size = CharSplitLMMinibatchLoader.get_table_len(self.vocab_mapping)
+    self.vocab_mapping = torch.load(vocab_file_path)
+    self.vocab_size = MinibatchLoader.get_table_len(self.vocab_mapping)
 
-    local x_data = torch.load(x_tensor_file)
-    local y_data = torch.load(y_tensor_file)
+    local x_data = torch.load(x_tensor_file_path)
+    local y_data = torch.load(y_tensor_file_path)
 
     local items_num_in_batch = self.batch_size * seq_length
-    x_data = CharSplitLMMinibatchLoader.trim_tensor(x_data, items_num_in_batch)
-    y_data = CharSplitLMMinibatchLoader.trim_tensor(y_data, items_num_in_batch)
+    x_data = MinibatchLoader.trim_tensor(x_data, items_num_in_batch)
+    y_data = MinibatchLoader.trim_tensor(y_data, items_num_in_batch)
 
 --    print(x_data)
 
@@ -65,7 +93,6 @@ function CharSplitLMMinibatchLoader.create(data_dir, batch_size, seq_length, spl
 --    for i = 1, #self.x_batches do
 --        print(self.x_batches[i])
 --    end
-
 
     ----------------------------------------------------------------
 
@@ -99,13 +126,13 @@ function CharSplitLMMinibatchLoader.create(data_dir, batch_size, seq_length, spl
 end
 
 
-function CharSplitLMMinibatchLoader:reset_batch_pointer(split_index, batch_index)
+function MinibatchLoader:reset_batch_pointer(split_index, batch_index)
     batch_index = batch_index or 0
     self.batch_ix[split_index] = batch_index
 end
 
 
-function CharSplitLMMinibatchLoader:next_batch(split_index)
+function MinibatchLoader:next_batch(split_index)
     if self.split_sizes[split_index] == 0 then
         -- perform a check here to make sure the user isn't screwing something up
         local split_names = {'train', 'val', 'test'}
@@ -125,7 +152,7 @@ function CharSplitLMMinibatchLoader:next_batch(split_index)
 end
 
 
-function CharSplitLMMinibatchLoader.is_processing_needed(input_file, vocab_file, x_tensor_file, y_tensor_file)
+function MinibatchLoader.is_processing_needed(input_file, vocab_file, x_tensor_file, y_tensor_file)
     -- fetch file attributes to determine if we need to rerun preprocessing
     local run_prepro = false
     if not (path.exists(vocab_file) and path.exists(x_tensor_file) and path.exists(y_tensor_file)) then
@@ -151,7 +178,7 @@ function CharSplitLMMinibatchLoader.is_processing_needed(input_file, vocab_file,
 end
 
 
-function CharSplitLMMinibatchLoader.save_files(vocab_file, vocab_mapping, x_tensor_file, x_tensor, y_tensor_file, y_tensor)
+function MinibatchLoader.save_files(vocab_file, vocab_mapping, x_tensor_file, x_tensor, y_tensor_file, y_tensor)
     -- save output preprocessed files
     print('saving ' .. vocab_file)
     torch.save(vocab_file, vocab_mapping)
@@ -164,10 +191,9 @@ function CharSplitLMMinibatchLoader.save_files(vocab_file, vocab_mapping, x_tens
 end
 
 
-function CharSplitLMMinibatchLoader.get_chars_set(in_textfile)
+function MinibatchLoader.get_chars_set(in_textfile)
     print('loading text file...')
     local str_line
-    local tot_len = 0
     local f = assert(io.open(in_textfile, "r"))
 
     -- create vocabulary if it doesn't exist yet
@@ -183,7 +209,6 @@ function CharSplitLMMinibatchLoader.get_chars_set(in_textfile)
         for char in str_line:gmatch'.' do
             if not unordered_chars[char] then unordered_chars[char] = true end
         end
-        tot_len = tot_len + #str_line
         str_line = f:read()
     until not str_line
     f:close()
@@ -192,8 +217,8 @@ function CharSplitLMMinibatchLoader.get_chars_set(in_textfile)
 end
 
 
-function CharSplitLMMinibatchLoader.get_vocab_mapping(in_textfile)
-    local unordered_chars = CharSplitLMMinibatchLoader.get_chars_set(in_textfile)
+function MinibatchLoader.get_vocab_mapping(in_textfile)
+    local unordered_chars = MinibatchLoader.get_chars_set(in_textfile)
 
     -- sort into a table (i.e. keys become 1..N)
     local ordered_chars = {}
@@ -210,22 +235,19 @@ function CharSplitLMMinibatchLoader.get_vocab_mapping(in_textfile)
 end
 
 
-function CharSplitLMMinibatchLoader.get_processed_lines(input_file)
+function MinibatchLoader.get_processed_lines(raw_lines)
     local processed_lines = {}
-    local f = assert(io.open(input_file, "r"))
 
-    local line_str = f:read()
-    repeat
+    for i=1, #raw_lines do
+        local line_str = raw_lines[i]
         processed_lines[#processed_lines + 1] = line_str .. EOS_SYBOL
-        line_str = f:read()
-    until not line_str
+    end
 
-    f:close()
     return processed_lines
 end
 
 
-function CharSplitLMMinibatchLoader.pad_from_left(sentence, context_len)
+function MinibatchLoader.pad_from_left(sentence, context_len)
     if #sentence >= context_len then
         return sentence
     else
@@ -235,7 +257,7 @@ function CharSplitLMMinibatchLoader.pad_from_left(sentence, context_len)
 end
 
 
-function CharSplitLMMinibatchLoader.get_rolling_windows(sentence, window_size)
+function MinibatchLoader.get_rolling_windows(sentence, window_size)
     local rolling_windows = {}
     local cur_window = sentence:sub(1, window_size)
     rolling_windows[#rolling_windows + 1] = cur_window
@@ -252,7 +274,7 @@ function CharSplitLMMinibatchLoader.get_rolling_windows(sentence, window_size)
 end
 
 
-function CharSplitLMMinibatchLoader.get_all_xy_sequences(processed_lines, seq_length)
+function MinibatchLoader.get_all_xy_sequences(processed_lines, seq_length)
     local x_sequences = {}
     local y_sequences = {}
 
@@ -262,11 +284,11 @@ function CharSplitLMMinibatchLoader.get_all_xy_sequences(processed_lines, seq_le
     end
 
     for i=1, #processed_lines, 2 do
-        local padded_sentence = CharSplitLMMinibatchLoader.pad_from_left(processed_lines[i], seq_length)
+        local padded_sentence = MinibatchLoader.pad_from_left(processed_lines[i], seq_length)
         local next_sentence = processed_lines[i+1]
         local joined_sent = padded_sentence .. next_sentence
 
-        local rolling_windows = CharSplitLMMinibatchLoader.get_rolling_windows(joined_sent, seq_length + 1)
+        local rolling_windows = MinibatchLoader.get_rolling_windows(joined_sent, seq_length + 1)
 
         for _, window in pairs(rolling_windows) do
             local x_seq = window:sub(1, #window-1)
@@ -275,11 +297,12 @@ function CharSplitLMMinibatchLoader.get_all_xy_sequences(processed_lines, seq_le
             y_sequences[#y_sequences + 1] = y_seq
         end
     end
+
     return x_sequences, y_sequences
 end
 
 
-function CharSplitLMMinibatchLoader.sequences_to_tensor(input_sequences, seq_length, vocab_mapping)
+function MinibatchLoader.sequences_to_tensor(input_sequences, seq_length, vocab_mapping)
     print('putting data into tensor...')
 --    local data_tensor = torch.DoubleTensor(#input_sequences, seq_length)
     local data_tensor = torch.ByteTensor(#input_sequences, seq_length)
@@ -293,12 +316,11 @@ function CharSplitLMMinibatchLoader.sequences_to_tensor(input_sequences, seq_len
         end
     end
 
-    print(data_tensor)
     return data_tensor
 end
 
 
-function CharSplitLMMinibatchLoader.get_table_len(mytable)
+function MinibatchLoader.get_table_len(mytable)
     local count = 0
     for _ in pairs(mytable) do
         count = count + 1
@@ -307,7 +329,7 @@ function CharSplitLMMinibatchLoader.get_table_len(mytable)
 end
 
 
-function CharSplitLMMinibatchLoader.trim_tensor(data, items_num_in_batch)
+function MinibatchLoader.trim_tensor(data, items_num_in_batch)
     -- cut off the end so that it divides evenly
     local saved_dim = data:size(2)
     local total_items_num = data:size(1) * data:size(2)
@@ -321,5 +343,5 @@ function CharSplitLMMinibatchLoader.trim_tensor(data, items_num_in_batch)
     return data
 end
 
-return CharSplitLMMinibatchLoader
+return MinibatchLoader
 
