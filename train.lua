@@ -38,6 +38,7 @@ cmd:option('-data_dir','data/movie_subs','data directory. Should contain the fil
 cmd:option('-rnn_size', 128, 'size of LSTM internal state')
 cmd:option('-num_layers', 2, 'number of layers in the LSTM')
 cmd:option('-model', 'lstm', 'lstm,gru or rnn')
+cmd:option('-reset_frequency', '200', 'reset hidden state every n characters')
 -- optimization
 cmd:option('-learning_rate',2e-3,'learning rate')
 cmd:option('-learning_rate_decay',0.97,'learning rate decay')
@@ -218,6 +219,12 @@ function prepro(x,y)
     return x,y
 end
 
+
+function reset_state(init_state)
+    rnn_state = {[0] = init_state}
+    return rnn_state
+end
+
 -- evaluate the loss over an entire split
 function eval_split(split_index, max_batches)
     print('evaluating loss over split index ' .. split_index)
@@ -226,9 +233,12 @@ function eval_split(split_index, max_batches)
 
     loader:reset_batch_pointer(split_index) -- move batch iteration pointer for this split to front
     local loss = 0
-    local rnn_state = {[0] = init_state}
+    local rnn_state = reset_state(init_state)
     
     for i = 1,n do -- iterate over batches in the split
+        if i % reset_frequency == 0 then
+            rnn_state = reset_state(init_state)
+
         -- fetch a batch
         local x, y = loader:next_batch(split_index)
         x,y = prepro(x,y)
