@@ -45,6 +45,9 @@ end
 
 -- check that cunn/cutorch are installed if user wants to use the GPU
 function check_cunn_availability()
+    local cunn, cutorch
+    local ok, ok2
+
     if opt.gpuid >= 0 and opt.opencl == 0 then
         local ok, cunn = pcall(require, 'cunn')
         local ok2, cutorch = pcall(require, 'cutorch')
@@ -52,27 +55,37 @@ function check_cunn_availability()
         if not ok2 then gprint('package cutorch not found!') end
         if ok and ok2 then
             gprint('using CUDA on GPU ' .. opt.gpuid .. '...')
-            gprint('Make sure that your saved checkpoint was also trained with GPU. If it was trained with CPU use -gpuid -1 for sampling as well')
+            gprint('Make sure that your saved checkpoint was also trained with GPU. ' ..
+                'If it was trained with CPU use -gpuid -1 for sampling as well')
             cutorch.setDevice(opt.gpuid + 1) -- note +1 to make it 0 indexed! sigh lua
             cutorch.manualSeed(opt.seed)
         else
-            gprint('Falling back on CPU mode')
+            print('If cutorch and cunn are installed, your CUDA toolkit may be improperly configured.')
+            print('Check your CUDA toolkit installation, rebuild cutorch and cunn, and try again.')
+            print('Falling back on CPU mode')
             opt.gpuid = -1 -- overwrite user setting
         end
     end
+
+    return cunn, cutorch
 end
 
 
 -- check that clnn/cltorch are installed if user wants to use OpenCL
 function check_clnn_availability()
+    local clnn, cltorch
+    local ok, ok2
+
     if opt.gpuid >= 0 and opt.opencl == 1 then
-        local ok, cunn = pcall(require, 'clnn')
-        local ok2, cutorch = pcall(require, 'cltorch')
+        -- TODO: report about a bug here: previously was cunn and cutorch
+        local ok, clnn = pcall(require, 'clnn')
+        local ok2, cltorch = pcall(require, 'cltorch')
         if not ok then print('package clnn not found!') end
         if not ok2 then print('package cltorch not found!') end
         if ok and ok2 then
             gprint('using OpenCL on GPU ' .. opt.gpuid .. '...')
-            gprint('Make sure that your saved checkpoint was also trained with GPU. If it was trained with CPU use -gpuid -1 for sampling as well')
+            gprint('Make sure that your saved checkpoint was also trained with GPU. ' ..
+                    'If it was trained with CPU use -gpuid -1 for sampling as well')
             cltorch.setDevice(opt.gpuid + 1) -- note +1 to make it 0 indexed! sigh lua
             torch.manualSeed(opt.seed)
         else
@@ -80,6 +93,8 @@ function check_clnn_availability()
             opt.gpuid = -1 -- overwrite user setting
         end
     end
+
+    return clnn, cltorch
 end
 
 
@@ -103,7 +118,7 @@ end
 
 
 -- initialize the vocabulary (and its inverted version)
-function get_vocabs()
+local function get_vocabs(checkpoint)
     local vocab = checkpoint.vocab
     local ivocab = {}
     for c,i in pairs(vocab) do ivocab[i] = c end
@@ -113,10 +128,9 @@ end
 
 
 -- initialize the rnn state to all zeros
-function init_rnn_state(checkpoint)
+local function init_rnn_state(checkpoint)
     gprint('creating an ' .. checkpoint.opt.model .. '...')
-    local current_state
-    current_state = {}
+    local current_state = {}
 
     for L = 1, checkpoint.opt.num_layers do
         -- c and h for all layers
@@ -134,8 +148,9 @@ function init_rnn_state(checkpoint)
 end
 
 
-function get_current_state(lst, state_size)
+local function get_current_state(lst, state_size)
     local current_state = {}
+
     for i=1,state_size do
         table.insert(current_state, lst[i])
     end
@@ -144,14 +159,14 @@ function get_current_state(lst, state_size)
 end
 
 
-function get_converted_char_id(char_id)
+local function get_converted_char_id(char_id)
     if opt.gpuid >= 0 and opt.opencl == 0 then char_id = char_id:cuda() end
     if opt.gpuid >= 0 and opt.opencl == 1 then char_id = char_id:cl() end
     return char_id
 end
 
 
-function generate_response(input_str, current_state, vocab, ivocab)
+local function generate_response(input_str, current_state, vocab, ivocab)
     local response_str = ''
     local state_size = #current_state
 
@@ -185,8 +200,20 @@ function generate_response(input_str, current_state, vocab, ivocab)
         local lst = protos.rnn:forward{prev_char_id, unpack(current_state)}
         current_state = get_current_state(lst, state_size)
         predicted_distribution = lst[#lst] -- last element holds the log probabilities
-
     until (prev_char_id == EOS) or (char_num > opt.length)
 
     return response_str
+end
+
+
+function generate_test_responses(test_set_fh, checkpoint)
+    local vocab, ivocab = get_vocabs(checkpoint)
+    local current_state = init_rnn_state(checkpoint)
+    local input_str = test_set_fh:read()
+
+    repeat
+        local response = generate_response(input_str, current_state, vocab, ivocab)
+        print('%s -> %s\n', input_str, response)
+        input_str = test_set_fh:read()
+    until not input_str
 end

@@ -10,7 +10,7 @@ local LINES_BATCH_SIZE = 1000
 local MinibatchLoader = {}
 MinibatchLoader.__index = MinibatchLoader
 
-function MinibatchLoader.create(data_dir, batch_size, seq_length, split_fractions)
+function MinibatchLoader.create(data_dir, train_file_path, batch_size, seq_length, split_fractions)
     -- split_fractions is e.g. {0.9, 0.05, 0.05}
 
     local self = {}
@@ -19,7 +19,7 @@ function MinibatchLoader.create(data_dir, batch_size, seq_length, split_fraction
     self.batch_size = batch_size
     self.seq_length = seq_length
 
-    local input_file_path = path.join(data_dir, 'input.txt')
+    local input_file_path = path.join(train_file_path)
     local vocab_file_path = path.join(data_dir, 'vocab.t7')
     local x_tensor_file_path = path.join(data_dir, 'x_tensor.t7')
     local y_tensor_file_path = path.join(data_dir, 'y_tensor.t7')
@@ -194,7 +194,7 @@ end
 function MinibatchLoader.get_chars_set(in_textfile)
     print('loading text file...')
     local str_line
-    local f = assert(io.open(in_textfile, "r"))
+    local f = assert(io.open(in_textfile, 'r'))
 
     -- create vocabulary if it doesn't exist yet
     print('creating vocabulary mapping...')
