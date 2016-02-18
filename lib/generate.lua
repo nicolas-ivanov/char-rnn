@@ -36,10 +36,6 @@ cmd:text()
 opt = cmd:parse(arg)
 torch.manualSeed(opt.seed)
 
-
-print('>>', opt.temperature)
-
-
 -- gated print: simple utility function wrapping a print
 function gprint(str)
     if opt.verbose == 1 then print(str) end
@@ -203,7 +199,7 @@ local function generate_response(input_str, protos, current_state, vocab, ivocab
         local lst = protos.rnn:forward{prev_char_id, unpack(current_state)}
         current_state = get_current_state(lst, state_size)
         predicted_distribution = lst[#lst] -- last element holds the log probabilities
-    until (prev_char_id == EOS_SYMBOL) or (char_num > opt.length)
+    until (prev_char_id[1] == vocab[EOS_SYMBOL]) or (char_num > opt.length)
 
     return response_str
 end
