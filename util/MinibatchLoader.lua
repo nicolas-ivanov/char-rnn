@@ -2,8 +2,8 @@
 -- Modified from https://github.com/oxford-cs-ml-2015/practical6
 -- the modification included support for train/val/test splits
 
-local EOS_SYBOL = '|'
-local PAD_SYBOL = '~'
+EOS_SYMBOL = '|'
+PAD_SYMBOL = '~'
 
 local LINES_BATCH_SIZE = 1000
 
@@ -19,7 +19,7 @@ function MinibatchLoader.create(data_dir, train_file_path, batch_size, seq_lengt
     self.batch_size = batch_size
     self.seq_length = seq_length
 
-    local input_file_path = path.join(train_file_path)
+    local input_file_path = train_file_path
     local vocab_file_path = path.join(data_dir, 'vocab.t7')
     local x_tensor_file_path = path.join(data_dir, 'x_tensor.t7')
     local y_tensor_file_path = path.join(data_dir, 'y_tensor.t7')
@@ -201,8 +201,8 @@ function MinibatchLoader.get_chars_set(in_textfile)
     
     -- record all characters to a set
     local unordered_chars = {}
-    unordered_chars[PAD_SYBOL] = true
-    unordered_chars[EOS_SYBOL] = true
+    unordered_chars[PAD_SYMBOL] = true
+    unordered_chars[EOS_SYMBOL] = true
 
     str_line = f:read()
     repeat
@@ -240,7 +240,7 @@ function MinibatchLoader.get_processed_lines(raw_lines)
 
     for i=1, #raw_lines do
         local line_str = raw_lines[i]
-        processed_lines[#processed_lines + 1] = line_str .. EOS_SYBOL
+        processed_lines[#processed_lines + 1] = line_str .. EOS_SYMBOL
     end
 
     return processed_lines
@@ -251,7 +251,7 @@ function MinibatchLoader.pad_from_left(sentence, context_len)
     if #sentence >= context_len then
         return sentence
     else
-        local padded_str = string.rep(PAD_SYBOL, context_len - #sentence) .. sentence
+        local padded_str = string.rep(PAD_SYMBOL, context_len - #sentence) .. sentence
         return padded_str
     end
 end
@@ -280,7 +280,7 @@ function MinibatchLoader.get_all_xy_sequences(processed_lines, seq_length)
 
     -- even the number of lines
     if #processed_lines % 2 == 1 then
-        processed_lines[#processed_lines + 1] = EOS_SYBOL
+        processed_lines[#processed_lines + 1] = EOS_SYMBOL
     end
 
     for i=1, #processed_lines, 2 do

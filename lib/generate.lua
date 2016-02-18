@@ -12,7 +12,7 @@ require 'lfs'
 
 require 'util.OneHot'
 require 'util.misc'
-require 'util.MinibatchLoader.EOS'
+require 'util.MinibatchLoader'
 
 cmd = torch.CmdLine()
 cmd:text()
@@ -20,7 +20,7 @@ cmd:text('Sample from a character-level language model')
 cmd:text()
 cmd:text('Options')
 -- required:
-cmd:argument('-model','model checkpoint to use for sampling')
+--cmd:argument('-model','model checkpoint to use for sampling')
 -- optional parameters
 cmd:option('-seed',123,'random number generator\'s seed')
 cmd:option('-sample',1,' 0 to use max at each timestep, 1 to sample at each timestep')
@@ -35,6 +35,9 @@ cmd:text()
 -- parse input params
 opt = cmd:parse(arg)
 torch.manualSeed(opt.seed)
+
+
+print('>>', opt.temperature)
 
 
 -- gated print: simple utility function wrapping a print
@@ -166,14 +169,14 @@ local function get_converted_char_id(char_id)
 end
 
 
-local function generate_response(input_str, current_state, vocab, ivocab)
+local function generate_response(input_str, protos, current_state, vocab, ivocab)
     local response_str = ''
     local state_size = #current_state
 
     -- do a few seeded timesteps to accumulate the hidden state
     local predicted_distribution
     local prev_char_id
-    input_str[#input_str] = EOS
+    input_str = input_str .. EOS_SYMBOL
 
     for c in input_str:gmatch'.' do
         prev_char_id = torch.Tensor{vocab[c]}
@@ -194,26 +197,28 @@ local function generate_response(input_str, current_state, vocab, ivocab)
         probs:div(torch.sum(probs)) -- renormalize so probs sum to one
         prev_char_id = torch.multinomial(probs:float(), 1):resize(1):float()
         char_num = char_num + 1
-        response_str[#response_str + 1] = ivocab[prev_char_id[1]]
+        response_str = response_str .. ivocab[prev_char_id[1]]
 
         -- forward the rnn for next character
         local lst = protos.rnn:forward{prev_char_id, unpack(current_state)}
         current_state = get_current_state(lst, state_size)
         predicted_distribution = lst[#lst] -- last element holds the log probabilities
-    until (prev_char_id == EOS) or (char_num > opt.length)
+    until (prev_char_id == EOS_SYMBOL) or (char_num > opt.length)
 
     return response_str
 end
 
 
-function generate_test_responses(test_set_fh, checkpoint)
+function generate_test_responses(test_set_file, checkpoint)
     local vocab, ivocab = get_vocabs(checkpoint)
     local current_state = init_rnn_state(checkpoint)
-    local input_str = test_set_fh:read()
+    local test_set_fh = assert(io.open(test_set_file, 'r'))
 
-    repeat
-        local response = generate_response(input_str, current_state, vocab, ivocab)
-        print('%s -> %s\n', input_str, response)
-        input_str = test_set_fh:read()
-    until not input_str
+    while true do
+        local input_str = test_set_fh:read()
+        if not input_str then break end
+        local response = generate_response(input_str, checkpoint.protos, current_state, vocab, ivocab)
+        print(input_str .. '\t->\t' .. response)
+    end
+    test_set_fh:close()
 end

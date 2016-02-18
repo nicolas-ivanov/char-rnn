@@ -1,0 +1,56 @@
+# the most basic examples:
+Hi!
+Hi
+
+# the most frequent quesitons from the dialogs dataset:
+what ?
+why ?
+who ?
+yeah ?
+what is it ?
+why not ?
+really ?
+huh ?
+yes ?
+what ' s that ?
+what are you doing ?
+what are you talking about ?
+what happened ?
+hello ?
+where ?
+how ?
+excuse me ?
+who are you ?
+what do you want ?
+what ' s wrong ?
+so ?
+
+# the most frequent questions from Luka logs:
+Hey man
+Hey what's up?
+How come?
+How do you like me?
+How old are you ?
+Like what?
+Okay whatever
+Show me
+So what's up
+Sure what time?
+What
+What are you doing?
+What do you do?
+What do you mean?!
+What is it?
+What is your name?
+What the fuck
+What?
+What's your favorite movie?
+What's your name ?
+When is your birthday?
+When?
+Where are you from?
+Where do you live?
+Who are you ?
+Who are you?
+Why do you hate me?
+Why?

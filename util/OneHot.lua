@@ -3,7 +3,6 @@ local OneHot, parent = torch.class('OneHot', 'nn.Module')
 
 function OneHot:__init(outputSize)
     parent.__init(self)
-    print('>>>', outputSize)
     self.outputSize = outputSize
     -- We'll construct one-hot encodings by using the index method to
     -- reshuffle the rows of an identity matrix. To avoid recreating
