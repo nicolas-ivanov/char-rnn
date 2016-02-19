@@ -14,6 +14,8 @@ require 'util.OneHot'
 require 'util.misc'
 require 'util.MinibatchLoader'
 
+local model_utils = require 'util.model_utils'
+
 cmd = torch.CmdLine()
 cmd:text()
 cmd:text('Sample from a character-level language model')
@@ -168,6 +170,7 @@ end
 local function generate_response(input_str, protos, current_state, vocab, ivocab)
     local response_str = ''
     local state_size = #current_state
+    model_utils.transfer_model_to_gpu(protos)
 
     -- do a few seeded timesteps to accumulate the hidden state
     local predicted_distribution

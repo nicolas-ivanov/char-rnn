@@ -37,7 +37,7 @@ cmd:text()
 cmd:text('Options')
 -- data
 cmd:option('-data_dir','data/train','data directory. Should contain the file input.txt with input data')
-cmd:option('-train_file_path','data/train/dialogs_50mb_ascii.txt','train file relative path')
+cmd:option('-train_file_path','data/train/dialogs_10k_ascii.txt','train file relative path')
 cmd:option('-test_file_path','data/test/test_dataset_ascii.txt','test file relative path')
 -- model params
 cmd:option('-rnn_size', 256, 'size of LSTM internal state')
@@ -61,7 +61,7 @@ cmd:option('-init_from', '', 'initialize network parameters from checkpoint at t
 -- bookkeeping
 cmd:option('-seed',123,'torch manual random number generator seed')
 cmd:option('-print_every',1,'how many steps/minibatches between printing out the loss')
-cmd:option('-eval_val_every',1500,'every how many iterations should we evaluate on validation data?')
+cmd:option('-eval_val_every',5,'every how many iterations should we evaluate on validation data?')
 cmd:option('-checkpoint_dir', 'cv', 'output directory where checkpoints get written')
 cmd:option('-savefile','lstm','filename to autosave the checkpont to. Will be inside checkpoint_dir/')
 cmd:option('-accurate_gpu_timing',0,'set this flag to 1 to get precise timings when using GPU. Might make code bit slower but reports accurate timings.')
@@ -145,16 +145,6 @@ function init_hidden_state()
     end
 
     return init_state
-end
-
--- ship the model to the GPU if desired
-function transfer_model_to_gpu(protos)
-    if opt.gpuid >= 0 and opt.opencl == 0 then
-        for k,v in pairs(protos) do v:cuda() end
-    end
-    if opt.gpuid >= 0 and opt.opencl == 1 then
-        for k,v in pairs(protos) do v:cl() end
-    end
 end
 
 
@@ -378,7 +368,7 @@ function train(data_loader, protos, params, grad_params, clones, init_state, ini
 
     local first_epoch_percentage = 1 / data_loader.ntrain
     local first_iteration_num = 1
-    local current_checkpoint = save_checkpoint(protos, opt, train_losses, val_losses, first_epoch_percentage, first_epoch_percentage, data_loader, init_state, clones)
+    local current_checkpoint = save_checkpoint(protos, opt, train_losses, val_losses, first_epoch_percentage, first_iteration_num, data_loader, init_state, clones)
 
     for i = 1, iterations do
         local epoch = i / data_loader.ntrain
@@ -428,7 +418,7 @@ function main()
 
     local protos, do_random_init = define_model(vocab, vocab_size)
     local init_state = init_hidden_state()
-    transfer_model_to_gpu(protos)
+    model_utils.transfer_model_to_gpu(protos)
 
     -- put the above things into one flattened parameters tensor
     local params, grad_params = model_utils.combine_all_parameters(protos.rnn)

@@ -159,4 +159,16 @@ function model_utils.clone_many_times(net, T)
     return clones
 end
 
+
+-- ship the model to the GPU if desired
+function model_utils.transfer_model_to_gpu(protos)
+    if opt.gpuid >= 0 and opt.opencl == 0 then
+        for k,v in pairs(protos) do v:cuda() end
+    end
+    if opt.gpuid >= 0 and opt.opencl == 1 then
+        for k,v in pairs(protos) do v:cl() end
+    end
+end
+
+
 return model_utils
