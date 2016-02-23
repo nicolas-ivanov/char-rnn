@@ -230,4 +230,4 @@ function main()
     generate_test_responses(opt.test_file_path, checkpoint)
 end
 
-main()
+--main()
