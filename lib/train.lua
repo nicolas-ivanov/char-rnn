@@ -16,7 +16,6 @@ which is turn based on other stuff in Torch, etc... (long lineage)
 require 'torch'
 require 'nn'
 require 'nngraph'
---require 'optim'
 require 'lfs'
 
 require 'util.OneHot'
@@ -61,7 +60,7 @@ cmd:option('-init_from', '', 'initialize network parameters from checkpoint at t
 -- bookkeeping
 cmd:option('-seed',123,'torch manual random number generator seed')
 cmd:option('-print_every',1,'how many steps/minibatches between printing out the loss')
-cmd:option('-eval_val_every',5,'every how many iterations should we evaluate on validation data?')
+cmd:option('-eval_val_every',500,'every how many iterations should we evaluate on validation data?')
 cmd:option('-checkpoint_dir', 'cv', 'output directory where checkpoints get written')
 cmd:option('-savefile','lstm','filename to autosave the checkpont to. Will be inside checkpoint_dir/')
 cmd:option('-accurate_gpu_timing',0,'set this flag to 1 to get precise timings when using GPU. Might make code bit slower but reports accurate timings.')
@@ -384,7 +383,7 @@ function train(data_loader, protos, params, grad_params, clones, init_state, ini
         -- every now and then or on last iteration
         if i % opt.eval_val_every == 0 or i == iterations then
             current_checkpoint = save_checkpoint(protos, opt, train_losses, val_losses, epoch, i, data_loader, init_state, clones)
-            generate_test_responses(opt.test_file_path, current_checkpoint)
+--            generate_test_responses(opt.test_file_path, current_checkpoint)
         end
 
         if i % opt.print_every == 0 then
@@ -414,7 +413,6 @@ function main()
 
     -- make sure output directory exists
     if not path.exists(opt.checkpoint_dir) then lfs.mkdir(opt.checkpoint_dir) end
-
 
     local protos, do_random_init = define_model(vocab, vocab_size)
     local init_state = init_hidden_state()

@@ -21,9 +21,8 @@ cmd:text()
 cmd:text('Sample from a character-level language model')
 cmd:text()
 cmd:text('Options')
--- required:
---cmd:argument('-model','model checkpoint to use for sampling')
 -- optional parameters
+cmd:option('-model','','model checkpoint to use for sampling')
 cmd:option('-seed',123,'random number generator\'s seed')
 cmd:option('-sample',1,' 0 to use max at each timestep, 1 to sample at each timestep')
 cmd:option('-primetext',"",'used as a prompt to "seed" the state of the LSTM using a given sequence, before we sample.')
@@ -32,6 +31,7 @@ cmd:option('-temperature',0.5,'temperature of sampling')
 cmd:option('-gpuid',0,'which gpu to use. -1 = use CPU')
 cmd:option('-opencl',0,'use OpenCL (instead of CUDA)')
 cmd:option('-verbose',1,'set to 0 to ONLY print the sampled text, no diagnostics')
+cmd:option('-test_file_path','data/test/test_dataset_ascii.txt','test file relative path')
 cmd:text()
 
 -- parse input params
@@ -100,7 +100,7 @@ end
 
 
 -- load the model checkpoint
-function load_checkpoint()
+local function load_checkpoint()
     if not lfs.attributes(opt.model, 'mode') then
         gprint('Error: File ' .. opt.model .. ' does not exist. Are you sure you didn\'t forget to prepend cv/ ?')
     end
@@ -110,7 +110,7 @@ function load_checkpoint()
 end
 
 
-function get_protos()
+local function get_protos(checkpoint)
     local protos = checkpoint.protos
     protos.rnn:evaluate() -- put in eval mode so that dropout works properly
 
@@ -209,6 +209,7 @@ end
 
 
 function generate_test_responses(test_set_file, checkpoint)
+    local protos = get_protos(checkpoint)
     local vocab, ivocab = get_vocabs(checkpoint)
     local current_state = init_rnn_state(checkpoint)
     local test_set_fh = assert(io.open(test_set_file, 'r'))
@@ -216,8 +217,17 @@ function generate_test_responses(test_set_file, checkpoint)
     while true do
         local input_str = test_set_fh:read()
         if not input_str then break end
-        local response = generate_response(input_str, checkpoint.protos, current_state, vocab, ivocab)
+        local response = generate_response(input_str, protos, current_state, vocab, ivocab)
         print(input_str .. '\t->\t' .. response)
     end
     test_set_fh:close()
 end
+
+
+function main()
+    check_cunn_availability()
+    local checkpoint = load_checkpoint(opt.model)
+    generate_test_responses(opt.test_file_path, checkpoint)
+end
+
+main()
