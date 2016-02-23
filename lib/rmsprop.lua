@@ -29,7 +29,7 @@ function rmsprop(opfunc, x, config, state, packed_args)
     local epsilon = config.epsilon or 1e-8
 
     -- (1) evaluate f(x) and df/dx
-    local fx, dfdx = opfunc(x, packed_args)
+    local fx, dfdx, current_state = opfunc(x, packed_args)
 
     -- (2) initialize mean square values and square gradient storage
     if not state.m then
@@ -46,5 +46,5 @@ function rmsprop(opfunc, x, config, state, packed_args)
     x:addcdiv(-lr, dfdx, state.tmp)
 
     -- return x*, f(x) before optimization
-    return x, {fx}
+    return x, {fx}, current_state
 end

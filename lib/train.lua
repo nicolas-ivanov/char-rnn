@@ -60,7 +60,7 @@ cmd:option('-init_from','','initialize network parameters from checkpoint at thi
 -- bookkeeping
 cmd:option('-seed',123,'torch manual random number generator seed')
 cmd:option('-print_every',1,'how many steps/minibatches between printing out the loss')
-cmd:option('-eval_val_every',500,'every how many iterations should we evaluate on validation data?')
+cmd:option('-eval_val_every',1,'every how many iterations should we evaluate on validation data?')
 cmd:option('-checkpoint_dir', 'cv', 'output directory where checkpoints get written')
 cmd:option('-savefile','lstm','filename to autosave the checkpont to. Will be inside checkpoint_dir/')
 cmd:option('-accurate_gpu_timing',0,'set this flag to 1 to get precise timings when using GPU. Might make code bit slower but reports accurate timings.')
@@ -307,7 +307,7 @@ end
 
 -- do fwd/bwd and return loss, grad_params
 function feval(x_params, packed_args)
-    local params, grad_params, clones, init_state, init_state_global, data_loader = unpack(packed_args)
+    local params, grad_params, clones, init_state, current_state, data_loader = unpack(packed_args)
     if x_params ~= params then
         params:copy(x_params)
     end
@@ -317,7 +317,7 @@ function feval(x_params, packed_args)
     local x, y = data_loader:next_batch(1)
     x,y = prepro(x,y)
     ------------------- forward pass -------------------
-    local rnn_state = {[0] = init_state_global}
+    local rnn_state = {[0] = current_state }
     local predictions = {}           -- softmax outputs
     local loss = 0
     for t=1,opt.seq_length do
@@ -348,11 +348,11 @@ function feval(x_params, packed_args)
     end
     ------------------------ misc ----------------------
     -- transfer final state to initial state (BPTT)
-    init_state_global = rnn_state[#rnn_state] -- NOTE: I don't think this needs to be a clone, right?
+    current_state = rnn_state[#rnn_state] -- NOTE: I don't think this needs to be a clone, right?
     -- grad_params:div(opt.seq_length) -- this line should be here but since we use rmsprop it would have no effect. Removing for efficiency
     -- clip gradient element-wise
     grad_params:clamp(-opt.grad_clip, opt.grad_clip)
-    return loss, grad_params
+    return loss, grad_params, current_state
 end
 
 
@@ -363,6 +363,7 @@ function train(data_loader, protos, params, grad_params, clones, init_state, ini
     local optim_state = {learningRate = opt.learning_rate, alpha = opt.decay_rate}
     local iterations = opt.max_epochs * data_loader.ntrain
     local iterations_per_epoch = data_loader.ntrain
+    local current_state = init_state_global
     local loss0
 
     local first_epoch_percentage = 1 / data_loader.ntrain
@@ -372,18 +373,19 @@ function train(data_loader, protos, params, grad_params, clones, init_state, ini
     for i = 1, iterations do
         local epoch = i / data_loader.ntrain
         local timer = torch.Timer()
-        local packed_args = {params, grad_params, clones, init_state, init_state_global, data_loader }
-        local _, loss = rmsprop(feval, params, optim_state, nil, packed_args)
+        local packed_args = {params, grad_params, clones, init_state, current_state, data_loader }
+        local _, loss, state = rmsprop(feval, params, optim_state, nil, packed_args)
         local time = get_elapsed_time(timer)
 
         local train_loss = loss[1] -- the loss is inside a list, pop it
         train_losses[i] = train_loss
+        current_state = state
         optim_state.learningRate = update_decay_rate(optim_state.learningRate, data_loader, epoch, i)
 
         -- every now and then or on last iteration
         if i % opt.eval_val_every == 0 or i == iterations then
             current_checkpoint = save_checkpoint(protos, opt, train_losses, val_losses, epoch, i, data_loader, init_state, clones)
---            generate_test_responses(opt.test_file_path, current_checkpoint)
+            generate_test_responses(opt.test_file_path, current_checkpoint)
         end
 
         if i % opt.print_every == 0 then
